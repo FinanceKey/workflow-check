@@ -1,6 +1,6 @@
 name: 'Build and run tests'
 
-concurrency: 
+concurrency:
   group: build
 
 on:
@@ -12,47 +12,59 @@ on:
     paths:
       - "**.ts"
       - "**.json"
+      - "action.yml"
+      - "dist/**"
       - ".github/workflows/test.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/cache@v5
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
         with:
-          path: cache
-          key: ${{ runner.os }}
-      - uses: actions/checkout@v6
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: ${{ runner.os }}-node-
-      - run: npm install
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm test
       - run: npm run build
-      # Currently we don't want to commit dist folder
+
+      - name: Check dist is up to date
+        run: |
+          if [ -n "$(git status --porcelain dist)" ]; then
+            echo "::error::dist/ is out of date, run npm run build and commit the result"
+            git status --porcelain dist
+            exit 1
+          fi
+
       - uses: ./
         id: "check-success"
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          currentRunId: 0  # we give an invalid run id which results in finding this current run as running, therefore reporting running job found.
+          currentRunId: 0  # an invalid run id includes this run, so its own job is found as running
           runnerLabel: "ubuntu-latest"
       - uses: ./
         id: "check-failed"
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          currentRunId: ${{ github.run_id }} # we give this run id as current run id, usually there shouldn't be any other workfolows running in this repo
+          currentRunId: ${{ github.run_id }} # this run is excluded; usually no other workflow is running in this repo
           runnerLabel: "ubuntu-latest"
       - name: Validate Result (If Statement)
-        # Example how to check the output with an if statement in GitHub actions. Note that we can't check for a boolean (true) but have to check for string ('true')
+        # The output has to be compared to the string 'true', not the boolean
         if: ${{ steps.check-success.outputs.foundRunningJob == 'true' && steps.check-failed.outputs.foundRunningJob == 'false'}}
         run: exit 0
       - name: Validate Result (Shell)
-        # Example how we can test the output with bash. It's possible to either check for true (boolean) or 'true' (string)
         run: |
-          if [ '${{ steps.check-success.outputs.foundRunningJob }}' == true -a '${{ steps.check-failed.outputs.foundRunningJob }}' == false -a '${{ steps.check-success.outputs.foundRunningJob }}' == 'true' -a '${{ steps.check-failed.outputs.foundRunningJob }}' == 'false' ]; then
+          if [ '${{ steps.check-success.outputs.foundRunningJob }}' == true -a '${{ steps.check-failed.outputs.foundRunningJob }}' == false ]; then
             exit 0
           else
             exit 1
           fi
-

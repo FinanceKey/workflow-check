@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import {WarningPrefix} from './constants';
+import {WarningPrefix} from './constants.js';
 
 export function logWarning(msg: string) {
   core.warning(`${WarningPrefix} ${msg}`);

@@ -11,6 +11,10 @@ on:
           - 'major'
           - 'minor'
           - 'patch'
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -18,26 +22,24 @@ jobs:
       GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
-      - name: Cache node_modules
-        uses: actions/cache@v5
+      - uses: actions/setup-node@v7
         with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: ${{ runner.os }}-node-
+          node-version: 24
+          cache: npm
 
       - name: Install Deps
-        run: npm install
+        run: npm ci
 
       - name: Build
         run: npm run build && git add .
 
       - name: Check CI
         id: check-ci
-        uses: ronymeyer/workflow-check@master
+        uses: ./
         with:
-          #token: ${{ secrets.GITHUB_TOKEN }} # as we run on the same repo we don't need to specify the token. In other repos token needs to be specified.
+          token: ${{ secrets.GITHUB_TOKEN }}
           currentRunId: 0  # we give an invalid run id which results in finding this current run as running, therefore reporting running job found.
           runnerLabel: "ubuntu-latest"
 
