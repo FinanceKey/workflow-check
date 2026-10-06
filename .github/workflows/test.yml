@@ -1,8 +1,5 @@
 name: 'Build and run tests'
 
-concurrency:
-  group: build
-
 on:
   pull_request:
   push:
@@ -45,18 +42,19 @@ jobs:
             exit 1
           fi
 
+      # runner.name is unique per GitHub-hosted job, unlike ubuntu-latest, which other runs (e.g. Dependabot) also use
       - uses: ./
         id: "check-success"
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           currentRunId: 0  # an invalid run id includes this run, so its own job is found as running
-          runnerLabel: "ubuntu-latest"
+          runnerLabel: ${{ runner.name }}
       - uses: ./
         id: "check-failed"
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          currentRunId: ${{ github.run_id }} # this run is excluded; usually no other workflow is running in this repo
-          runnerLabel: "ubuntu-latest"
+          currentRunId: ${{ github.run_id }} # this run is excluded, and no other job runs on this job's runner
+          runnerLabel: ${{ runner.name }}
       - name: Validate Result (If Statement)
         # The output has to be compared to the string 'true', not the boolean
         if: ${{ steps.check-success.outputs.foundRunningJob == 'true' && steps.check-failed.outputs.foundRunningJob == 'false'}}
