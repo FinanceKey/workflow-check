@@ -7,6 +7,10 @@ updates:
     # Check the npm registry for updates every day (weekdays)
     schedule:
       interval: 'daily'
+    ignore:
+      # @types/node follows the Node version the runner executes the action with (action.yml: node24)
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: "github-actions"
     directory: "/"
