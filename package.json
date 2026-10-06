@@ -1,16 +1,18 @@
 {
   "name": "workflow-check",
-  "version": "2.0.1",
-  "description": "A Github Action that validates other workflow statuses on given runner",
+  "version": "3.0.0",
+  "description": "A GitHub Action that checks whether other workflows are running or queued on a given runner",
   "main": "dist/index.js",
   "scripts": {
     "build": "ncc build -o dist src/index.ts",
-    "format": "prettier --write **/*.ts",
+    "test": "tsc && node --test \"lib/**/*.test.js\"",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
     "release": "release-it"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ronymeyer/workflow-check.git"
+    "url": "git+https://github.com/FinanceKey/workflow-check.git"
   },
   "keywords": [
     "actions",
@@ -19,20 +21,29 @@
   "author": "Rony Meyer",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ronymeyer/workflow-check/issues"
+    "url": "https://github.com/FinanceKey/workflow-check/issues"
   },
-  "homepage": "https://github.com/ronymeyer/workflow-check/#readme",
+  "homepage": "https://github.com/FinanceKey/workflow-check#readme",
   "dependencies": {
-    "@actions/core": "^1.11.1",
-    "@octokit/auth-action": "^4.0.1",
-    "@octokit/rest": "^20.1.1"
+    "@actions/core": "^3.0.1",
+    "@octokit/auth-action": "^6.0.3",
+    "@octokit/rest": "^22.0.1"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=24"
   },
   "devDependencies": {
-    "@octokit/openapi-types": "^22.2.0",
-    "@types/node": "^22.14.1",
-    "@vercel/ncc": "^0",
-    "prettier": "^3",
-    "release-it": "*",
-    "typescript": "^5"
+    "@types/node": "^24.19.1",
+    "@vercel/ncc": "^0.45.0",
+    "prettier": "^3.9.9",
+    "release-it": "^21.1.0",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "release-it": {
+      "undici": "^7.30.0",
+      "basic-ftp": "^6.2.2"
+    }
   }
 }

@@ -1,21 +1,21 @@
 name: Workflow Checker
-description: Check if there are any other pending or in progress workflows for given runner lable
+description: Check if there are any other pending, queued or in progress jobs on a given self-hosted runner
 branding:
   icon: check-circle
   color: blue
 inputs:
   token:
-    description: 'GITHUB_TOKEN'
+    description: 'GITHUB_TOKEN, needs actions: read'
     required: true
   currentRunId:
-    description: 'The run id of the current runner, required to exclude from results, pass in github.run_id'
+    description: 'The run id of the current run, excluded from the results. Pass in github.run_id'
     required: true
   runnerLabel:
-    description: 'Lable to be checked for other running workflows'
+    description: 'Runner to check: matched against the runner name (the label itself or <label>-<n>) and the requested runs-on labels'
     required: true
 outputs:
   foundRunningJob:
     description: 'true if other running jobs have been found, false otherwise'
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'dist/index.js'

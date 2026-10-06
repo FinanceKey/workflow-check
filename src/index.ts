@@ -1,124 +1,119 @@
 import * as core from '@actions/core';
-import { components } from "@octokit/openapi-types";
-import { Octokit } from '@octokit/rest';
-import {
-  getOptionalInput,
-  getOwnerAndRepo,
-  getRepository
-} from './utils';
-import { createActionAuth } from "@octokit/auth-action";
+import {createActionAuth} from '@octokit/auth-action';
+import {Octokit} from '@octokit/rest';
+import {getOptionalInput, getOwnerAndRepo, getRepository} from './utils.js';
+import {blocksRunner, type JobInfo, type RunStatus} from './match.js';
 
-async function checkWorkflow(octokit: Octokit, owner: string, repo: string, statusToCheck: components["parameters"]["workflow-run-status"], currentRunId: string, runnerLabel: string): Promise<boolean> {
-  let foundRunningJob = false;
-
+async function checkWorkflow(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  statusToCheck: RunStatus,
+  currentRunId: number,
+  runnerLabel: string
+): Promise<boolean> {
   core.info(`Start checking for status ${statusToCheck}.`);
 
-  core.info(`Using owner ${owner} and repo ${repo}.`);
+  const workflowRuns = await octokit.paginate(
+    octokit.rest.actions.listWorkflowRunsForRepo,
+    {owner, repo, status: statusToCheck, per_page: 100}
+  );
+  const otherRuns = workflowRuns.filter(run => run.id !== currentRunId);
+  core.info(
+    `Found ${workflowRuns.length} run(s) with status ${statusToCheck}, ${otherRuns.length} other than the current run.`
+  );
 
-  const listWorkflowRunsForRepoResult = await octokit.request("GET /repos/{owner}/{repo}/actions/runs", {
-    owner: owner,
-    repo: repo,
-    status: statusToCheck
-  });
-  /*
-  // this call doesn't work, it looks like owner and repo don't get replaced in the URL
-  octokit.rest.actions.listWorkflowRunsForRepo()
-  const listWorkflowRunsForRepoResult = await octokit.actions.listWorkflowRunsForRepo({
-    owner: owner,
-    repo: repo,
-    status: statusToCheck
-  });
-  */
-  core.info(`Check Runs: Received status code: ${listWorkflowRunsForRepoResult.status}, number or results: ${listWorkflowRunsForRepoResult.data.total_count}.`);
-
-  let workFlowRunsFiltered = listWorkflowRunsForRepoResult.data.workflow_runs.filter((f) => f.id != Number(currentRunId));
-
-  const workFlowRunsMapped = workFlowRunsFiltered.map((x) => ({
-    run_id: x.id,
-    name: x.name
-  }));
-
-  for (const workFlowRun of workFlowRunsMapped) {
-    core.info(`Checking for jobs with status ${statusToCheck} and runner label ${runnerLabel}.`);
-
-    if (statusToCheck == "pending") {
-      core.info(`There are pending jobs, for pending jobs there is no run_id yet, so we can't get the label.`);
-      foundRunningJob = true;
-      break;
+  if (statusToCheck === 'pending' && otherRuns.length > 0) {
+    // Pending runs have no jobs yet, so it is unknown which runner they will use.
+    for (const run of otherRuns) {
+      core.info(`Pending run ${run.id} '${run.name}' blocks the runner.`);
     }
-    const listJobsForWorkflowRunResult = await octokit.rest.actions
-      .listJobsForWorkflowRun({
-        owner,
-        repo,
-        run_id: workFlowRun.run_id
-      });
-
-    core.info(`Check Workflow Run ${workFlowRun.run_id} with name '${workFlowRun.name}'. Received status code: ${listJobsForWorkflowRunResult.status}, number or results: ${listJobsForWorkflowRunResult.data.total_count}.`);
-
-    for (const job of listJobsForWorkflowRunResult.data.jobs) {
-      if (job.labels.includes(runnerLabel)) {
-        foundRunningJob = true;
-        break;
-      }
-    }
-    if (foundRunningJob)
-      break;
+    return true;
   }
 
-  // conclusion is null when run is in progress
-  core.info(`End checking for status ${statusToCheck}. foundRunningJob: ${foundRunningJob}`);
+  for (const run of otherRuns) {
+    const jobs: JobInfo[] = await octokit.paginate(
+      octokit.rest.actions.listJobsForWorkflowRun,
+      {owner, repo, run_id: run.id, filter: 'latest', per_page: 100}
+    );
+    core.info(`Run ${run.id} '${run.name}' has ${jobs.length} job(s).`);
 
-  return foundRunningJob;
+    for (const job of jobs) {
+      const reason = blocksRunner(job, runnerLabel);
+      core.info(
+        `  job '${job.name}' status=${job.status} runner=${job.runner_name ?? '-'} labels=[${job.labels.join(',')}] -> ${reason ?? 'not blocking'}`
+      );
+      if (reason) {
+        core.info(
+          `End checking for status ${statusToCheck}. foundRunningJob: true`
+        );
+        return true;
+      }
+    }
+  }
+
+  core.info(`End checking for status ${statusToCheck}. foundRunningJob: false`);
+  return false;
 }
 
 async function run(): Promise<void> {
   try {
-    //const token = core.getInput('GITHUB_TOKEN', { required: true });
-    const currentRunId = core.getInput('currentRunId', { required: true });
-    const runnerLabel = core.getInput('runnerLabel', { required: true });
-    let fullRepo = getOptionalInput('repo');
-    if (fullRepo === undefined) {
-      fullRepo = getRepository();
-    }
-    const [owner, repo] = getOwnerAndRepo(fullRepo);
+    const currentRunId = Number(
+      core.getInput('currentRunId', {required: true})
+    );
+    const runnerLabel = core.getInput('runnerLabel', {required: true});
+    const [owner, repo] = getOwnerAndRepo(
+      getOptionalInput('repo') ?? getRepository()
+    );
 
-    core.info(`Checking if there are any running runners with label ${runnerLabel} which are different to run id ${currentRunId}`);
+    core.info(
+      `Checking if there are any running jobs on runner ${runnerLabel} which are not part of run id ${currentRunId}`
+    );
 
-    var foundRunningJob = false
+    const authentication = await createActionAuth()();
+    core.info(
+      `Auth token type ${authentication.tokenType}, owner ${owner}, repo ${repo}`
+    );
+    const octokit = new Octokit({auth: authentication.token});
 
-    const auth = createActionAuth();
-    const authentication = await auth();
-    core.info(`Auth token type ${authentication.tokenType}, token ${authentication.token.length}, owner ${owner}, repo ${repo}`);
-    const octokit = new Octokit({ auth: authentication.token });
-
-    // loop through all statuses to check if we have any other running jobs
-    var statusesToCheck: components["parameters"]["workflow-run-status"][] = ["pending", "requested", "queued", "in_progress"];
+    const statusesToCheck: RunStatus[] = [
+      'pending',
+      'requested',
+      'waiting',
+      'queued',
+      'in_progress'
+    ];
+    let foundRunningJob = false;
     for (const statusToCheck of statusesToCheck) {
-      foundRunningJob = await checkWorkflow(octokit, owner, repo, statusToCheck, currentRunId, runnerLabel);
-      if (foundRunningJob)
-        break;
+      foundRunningJob = await checkWorkflow(
+        octokit,
+        owner,
+        repo,
+        statusToCheck,
+        currentRunId,
+        runnerLabel
+      );
+      if (foundRunningJob) break;
     }
 
-    // conclusion is null when run is in progress
     core.info(`foundRunningJob: ${foundRunningJob}`);
     core.setOutput('foundRunningJob', foundRunningJob);
-
   } catch (ex) {
-    const error = ensureError(ex)
-    core.setFailed(`Failed with error: ${error.message}.`);
+    core.setFailed(`Failed with error: ${ensureError(ex).message}.`);
   }
 }
 
 function ensureError(value: unknown): Error {
-  if (value instanceof Error) return value
+  if (value instanceof Error) return value;
 
-  let stringified = '[Unable to stringify the thrown value]'
+  let stringified = '[Unable to stringify the thrown value]';
   try {
-    stringified = JSON.stringify(value)
-  } catch { }
+    stringified = JSON.stringify(value);
+  } catch {}
 
-  const error = new Error(`This value was thrown as is, not through an Error: ${stringified}`)
-  return error
+  return new Error(
+    `This value was thrown as is, not through an Error: ${stringified}`
+  );
 }
 
 run();
