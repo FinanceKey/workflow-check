@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
-import {blocksRunner, type JobInfo} from './match.js';
+import {blocksRunner, parseLabels, type JobInfo} from './match.js';
 
 function job(overrides: Partial<JobInfo>): JobInfo {
   return {
@@ -75,5 +75,74 @@ describe('blocksRunner', () => {
       ),
       null
     );
+  });
+
+  const machines = ['GitHubRunner02', 'GitHubRunner05'];
+
+  it('does not block for an unassigned job requesting another machine', () => {
+    assert.equal(
+      blocksRunner(
+        job({status: 'queued', labels: ['self-hosted', 'GitHubRunner05']}),
+        'GitHubRunner02',
+        machines
+      ),
+      null
+    );
+  });
+
+  it('blocks the machine an unassigned job requests', () => {
+    assert.equal(
+      blocksRunner(
+        job({status: 'queued', labels: ['self-hosted', 'GitHubRunner05']}),
+        'GitHubRunner05',
+        machines
+      ),
+      'requests GitHubRunner05'
+    );
+  });
+
+  it('blocks every machine for an unassigned shared-label job', () => {
+    assert.equal(
+      blocksRunner(job({status: 'queued'}), 'GitHubRunner02', machines),
+      'unassigned self-hosted job'
+    );
+  });
+
+  it('still blocks for a job running here that requested another machine', () => {
+    assert.equal(
+      blocksRunner(
+        job({
+          runner_name: 'GitHubRunner02-01',
+          labels: ['self-hosted', 'GitHubRunner05']
+        }),
+        'GitHubRunner02',
+        machines
+      ),
+      'running on GitHubRunner02-01'
+    );
+  });
+});
+
+describe('parseLabels', () => {
+  it('parses a JSON array', () => {
+    assert.deepEqual(parseLabels('["GitHubRunner02", "GitHubRunner05"]'), [
+      'GitHubRunner02',
+      'GitHubRunner05'
+    ]);
+  });
+
+  it('parses a comma or newline separated list', () => {
+    assert.deepEqual(
+      parseLabels(' GitHubRunner02, GitHubRunner05\nGitHubRunner03 '),
+      ['GitHubRunner02', 'GitHubRunner05', 'GitHubRunner03']
+    );
+  });
+
+  it('returns no labels for an empty input', () => {
+    assert.deepEqual(parseLabels('  '), []);
+  });
+
+  it('rejects a JSON value that is not an array of strings', () => {
+    assert.throws(() => parseLabels('[1, 2]'));
   });
 });

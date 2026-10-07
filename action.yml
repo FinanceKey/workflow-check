@@ -13,6 +13,10 @@ inputs:
   runnerLabel:
     description: 'Runner to check: matched against the runner name (the label itself or <label>-<n>) and the requested runs-on labels'
     required: true
+  runnerLabels:
+    description: 'Optional labels of all machines, as a JSON array or comma separated. A queued job that requests the label of another machine then does not block runnerLabel'
+    required: false
+    default: ''
 outputs:
   foundRunningJob:
     description: 'true if other running jobs have been found, false otherwise'

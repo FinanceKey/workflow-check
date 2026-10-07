@@ -2,7 +2,12 @@ import * as core from '@actions/core';
 import {createActionAuth} from '@octokit/auth-action';
 import {Octokit} from '@octokit/rest';
 import {getOptionalInput, getOwnerAndRepo, getRepository} from './utils.js';
-import {blocksRunner, type JobInfo, type RunStatus} from './match.js';
+import {
+  blocksRunner,
+  parseLabels,
+  type JobInfo,
+  type RunStatus
+} from './match.js';
 
 async function checkWorkflow(
   octokit: Octokit,
@@ -10,7 +15,8 @@ async function checkWorkflow(
   repo: string,
   statusToCheck: RunStatus,
   currentRunId: number,
-  runnerLabel: string
+  runnerLabel: string,
+  runnerLabels: string[]
 ): Promise<boolean> {
   core.info(`Start checking for status ${statusToCheck}.`);
 
@@ -39,7 +45,7 @@ async function checkWorkflow(
     core.info(`Run ${run.id} '${run.name}' has ${jobs.length} job(s).`);
 
     for (const job of jobs) {
-      const reason = blocksRunner(job, runnerLabel);
+      const reason = blocksRunner(job, runnerLabel, runnerLabels);
       core.info(
         `  job '${job.name}' status=${job.status} runner=${job.runner_name ?? '-'} labels=[${job.labels.join(',')}] -> ${reason ?? 'not blocking'}`
       );
@@ -62,6 +68,7 @@ async function run(): Promise<void> {
       core.getInput('currentRunId', {required: true})
     );
     const runnerLabel = core.getInput('runnerLabel', {required: true});
+    const runnerLabels = parseLabels(core.getInput('runnerLabels'));
     const [owner, repo] = getOwnerAndRepo(
       getOptionalInput('repo') ?? getRepository()
     );
@@ -69,6 +76,8 @@ async function run(): Promise<void> {
     core.info(
       `Checking if there are any running jobs on runner ${runnerLabel} which are not part of run id ${currentRunId}`
     );
+    if (runnerLabels.length > 0)
+      core.info(`Machine labels: ${runnerLabels.join(', ')}`);
 
     const authentication = await createActionAuth()();
     core.info(
@@ -91,7 +100,8 @@ async function run(): Promise<void> {
         repo,
         statusToCheck,
         currentRunId,
-        runnerLabel
+        runnerLabel,
+        runnerLabels
       );
       if (foundRunningJob) break;
     }
