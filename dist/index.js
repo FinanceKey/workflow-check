@@ -23653,19 +23653,35 @@ function getOwnerAndRepo(full) {
 }
 
 // src/match.ts
-function blocksRunner(job, runnerLabel) {
+function blocksRunner(job, runnerLabel, runnerLabels = []) {
   if (job.status === "completed") return null;
   const runnerName = job.runner_name ?? "";
   if (runnerName === runnerLabel || runnerName.startsWith(`${runnerLabel}-`))
     return `running on ${runnerName}`;
   if (job.labels.includes(runnerLabel)) return `requests ${runnerLabel}`;
-  if (!runnerName && job.labels.includes("self-hosted"))
+  if (!runnerName && job.labels.includes("self-hosted")) {
+    const otherMachine = job.labels.find(
+      (label) => label !== runnerLabel && runnerLabels.includes(label)
+    );
+    if (otherMachine) return null;
     return "unassigned self-hosted job";
+  }
   return null;
+}
+function parseLabels(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith("[")) {
+    const parsed = JSON.parse(trimmed);
+    if (!Array.isArray(parsed) || !parsed.every((l) => typeof l === "string"))
+      throw new Error("runnerLabels must be a JSON array of strings");
+    return parsed.map((l) => l.trim()).filter((l) => l);
+  }
+  return trimmed.split(/[,\n]/).map((l) => l.trim()).filter((l) => l);
 }
 
 // src/index.ts
-async function checkWorkflow(octokit, owner, repo, statusToCheck, currentRunId, runnerLabel) {
+async function checkWorkflow(octokit, owner, repo, statusToCheck, currentRunId, runnerLabel, runnerLabels) {
   info(`Start checking for status ${statusToCheck}.`);
   const workflowRuns = await octokit.paginate(
     octokit.rest.actions.listWorkflowRunsForRepo,
@@ -23688,7 +23704,7 @@ async function checkWorkflow(octokit, owner, repo, statusToCheck, currentRunId, 
     );
     info(`Run ${run2.id} '${run2.name}' has ${jobs.length} job(s).`);
     for (const job of jobs) {
-      const reason = blocksRunner(job, runnerLabel);
+      const reason = blocksRunner(job, runnerLabel, runnerLabels);
       info(
         `  job '${job.name}' status=${job.status} runner=${job.runner_name ?? "-"} labels=[${job.labels.join(",")}] -> ${reason ?? "not blocking"}`
       );
@@ -23709,12 +23725,15 @@ async function run() {
       getInput("currentRunId", { required: true })
     );
     const runnerLabel = getInput("runnerLabel", { required: true });
+    const runnerLabels = parseLabels(getInput("runnerLabels"));
     const [owner, repo] = getOwnerAndRepo(
       getOptionalInput("repo") ?? getRepository()
     );
     info(
       `Checking if there are any running jobs on runner ${runnerLabel} which are not part of run id ${currentRunId}`
     );
+    if (runnerLabels.length > 0)
+      info(`Machine labels: ${runnerLabels.join(", ")}`);
     const authentication = await createActionAuth()();
     info(
       `Auth token type ${authentication.tokenType}, owner ${owner}, repo ${repo}`
@@ -23735,7 +23754,8 @@ async function run() {
         repo,
         statusToCheck,
         currentRunId,
-        runnerLabel
+        runnerLabel,
+        runnerLabels
       );
       if (foundRunningJob) break;
     }

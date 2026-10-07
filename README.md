@@ -10,7 +10,7 @@ A job of another run blocks the runner when it is not completed and
 
 * its `runner_name` is the runner label or starts with `<runnerLabel>-` (several runner services on one machine, e.g. `GitHubRunner05-02`), or
 * it requests `runnerLabel` in `runs-on`, or
-* it is not yet assigned to a runner and requests `self-hosted`, since it could still be picked up by this runner.
+* it is not yet assigned to a runner and requests `self-hosted`, since it could still be picked up by this runner, unless it requests the label of another machine listed in `runnerLabels`.
 
 A job's `labels` are the labels it requested, not the labels of the runner it landed on, so a job using a shared label such as `[self-hosted, dotNet10]` can only be tied to a machine through `runner_name`.
 
@@ -23,6 +23,7 @@ Runs with status `pending` have no jobs yet, so any pending run blocks the runne
 * `token` - Your GitHub API token with `actions: read`. You can just use `${{ secrets.GITHUB_TOKEN }}`
 * `currentRunId` - The run id of the current runner, required to exclude from results. Use `${{ github.run_id }}`
 * `runnerLabel` - Runner to check, see above
+* `runnerLabels` - Optional labels of all machines, as a JSON array (e.g. `${{ vars.RUNNER_VMS }}`) or comma separated. Without it, every queued self-hosted job blocks every machine.
 
 ### Outputs
 
