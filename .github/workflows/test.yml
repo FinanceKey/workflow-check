@@ -9,9 +9,12 @@ on:
     paths:
       - "**.ts"
       - "**.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - "action.yml"
       - "dist/**"
       - ".github/workflows/test.yml"
+      - ".github/actions/**"
   workflow_dispatch:
 
 permissions:
@@ -24,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Setup frontend
+      - name: Setup Node.js and dependencies
         uses: ./.github/actions/setup-node
 
       - run: pnpm format:check
@@ -34,7 +37,7 @@ jobs:
       - name: Check dist is up to date
         run: |
           if [ -n "$(git status --porcelain dist)" ]; then
-            echo "::error::dist/ is out of date, run npm run build and commit the result"
+            echo "::error::dist/ is out of date, run pnpm build and commit the result"
             git status --porcelain dist
             exit 1
           fi

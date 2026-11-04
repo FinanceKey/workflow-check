@@ -1,16 +1,21 @@
 blockExoticSubdeps: true
 
-minimumReleaseAge: 720
+# Minutes; matches SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=24 in .github/actions/setup-node
+minimumReleaseAge: 1440
 
 onlyBuiltDependencies:
   - esbuild
 
 overrides:
-  basic-ftp@<=6.2.0: '>=6.2.1'
-  ip-address@<=10.7.3: '>=10.7.4'
-  undici@>=4.0.0 <6.29.1: '>=6.29.1'
+  basic-ftp@<=6.2.0: '^6.2.1'
+  ip-address@<=10.7.3: '^10.7.4'
+  undici@>=4.0.0 <6.29.1: '^6.29.1'
 
 trustPolicy: no-downgrade
 trustPolicyIgnoreAfter: 2880
 
-useNodeVersion: 26.13.0
+useNodeVersion: 24.22.2
+
+# dist/index.js embeds node_modules/.pnpm/<dir> paths in comments. pnpm shortens those dirs
+# at 60 chars on Windows and 120 elsewhere, so fix the length to build the same dist on every OS
+virtualStoreDirMaxLength: 60
