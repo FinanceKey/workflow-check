@@ -24,16 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install Deps
-        run: npm ci
+      - name: Setup Node.js and dependencies
+        uses: ./.github/actions/setup-node
 
       - name: Build
-        run: npm run build && git add .
+        run: pnpm run build && git add .
 
       - name: Check CI
         id: check-ci
@@ -48,4 +43,4 @@ jobs:
         run: |
           git config --global user.name 'Rony'
           git config --global user.email 'workflow-check.github.com@spot-light.ch'
-          npm run release -- --ci --increment ${{ github.event.inputs.increment }}
+          pnpm release -- --ci --increment ${{ github.event.inputs.increment }}

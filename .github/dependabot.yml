@@ -13,7 +13,10 @@ updates:
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # "/" covers .github/workflows; composite actions under .github/actions need listing too
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       # Check for updates to GitHub Actions every week
       interval: "weekly"
