@@ -38,7 +38,11 @@ jobs:
 
       - name: Release
         if: ${{ steps.check-ci.outputs.foundRunningJob == 'true' }}
+        # release-it reads GITHUB_TOKEN to create the GitHub Release. It is set only on this step:
+        # the Check CI step gets the token via `with: token`, and @octokit/auth-action fails if it is set twice
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name 'Rony'
           git config --global user.email 'workflow-check.github.com@spot-light.ch'
-          pnpm release -- --ci --increment ${{ github.event.inputs.increment }}
+          pnpm release --ci --increment ${{ github.event.inputs.increment }}
